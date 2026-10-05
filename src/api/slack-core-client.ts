@@ -86,10 +86,7 @@ interface DirectoryPush {
   groupsSyncedAt?: number;
 }
 
-import type { BriefingCards } from "../slack/briefing-cards.ts";
-
 export interface SlackCoreClient {
-  briefingCards?: BriefingCards;
   externalSlackParticipants(): Promise<boolean>;
   internalMemberOverrides(): Promise<string[]>;
   ackEmojiOverride(): Promise<string[] | null>;
@@ -153,7 +150,6 @@ type AckPickInput = {
 export type { SurfaceContextRequest };
 
 export interface SlackCoreClientDeps {
-  briefingCards?: BriefingCards;
   app: App;
   config: ScopedConfigStore;
   runtimeFallback: RuntimeChoice;
@@ -426,7 +422,6 @@ export function createSlackCoreClient(deps: SlackCoreClientDeps): SlackCoreClien
       };
     },
 
-    briefingCards: deps.briefingCards,
     ...createAgentRequestStore(deps.agentRequests),
 
     async pushDirectory(body) {
