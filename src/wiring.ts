@@ -26,6 +26,7 @@ import {
   providerKeysPresent,
   type Config,
 } from "./config.ts";
+import { createBriefingCards, type BriefingCard } from "./slack/briefing-cards.ts";
 import type { ServerDeps } from "./api/deps.ts";
 import {
   actorAssertionActive,
@@ -1771,7 +1772,12 @@ export function buildApp(
     items: loopItems,
     requestFire: (loopId) => void loopFire.fire(loopId, `loop:${loopId}:slack-event:${Date.now()}`).catch(() => {}),
   });
+  const briefingCards =
+    config.databaseUrl && config.slackBriefingCards
+      ? createBriefingCards(artifactMap<BriefingCard>("slack_briefing_cards"), Date.now, auditLog)
+      : undefined;
   const slackCore = createSlackCoreClient({
+    briefingCards,
     inboxEvent: (event) => inboxRealtime.onConversationEvent(event),
     app,
     leaderLease,
@@ -2203,6 +2209,7 @@ export function serverDeps(
   const configuredModel = configuredModelForHarness(config, config.harness);
   const carriedModelAuth = harnessCarriedModelAuth(config);
   return {
+    briefingCards: built.slackCore.briefingCards,
     production: config.production,
     allowUnauthenticatedCore: config.allowUnauthenticatedCore,
     ...(config.signingSecret ? { signingSecret: config.signingSecret } : {}),

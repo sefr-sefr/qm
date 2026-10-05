@@ -407,6 +407,23 @@ const FAMILIES: AgentApiFamily[] = [
     ],
   },
   {
+    match: (m, p) => (m === "GET" || m === "POST") && p === "/v1/briefing-cards",
+    routes: [
+      {
+        method: "GET",
+        path: "/v1/briefing-cards",
+        summary:
+          "Personal DM only, opt-in: list own briefing cards/status; follow next with ?after=. Respect done and snoozedUntil in Europe/Stockholm. Posting may be unconfirmed; never claim delivery without messageTs.",
+      },
+      {
+        method: "POST",
+        path: "/v1/briefing-cards",
+        summary:
+          "Personal DM only, opt-in: queue a card with {sourceKey, sourceVersion, title, summary, sourceUrl}. Use a stable source key and actual source revision, never today as sourceVersion. Replays do not reopen completed cards. Buttons: done, undo, snooze date, draft in thread (no external sends), HTTPS source. Returns 202 queued, not delivery confirmation.",
+      },
+    ],
+  },
+  {
     match: onPath("POST", "/v1/reach"),
     routes: [
       {

@@ -1,3 +1,4 @@
+import { createBriefingCardActions } from "./briefing-card-actions.ts";
 import { errMessage, swallow, swallowAs } from "../util/errors.ts";
 import { createEnvelopeStaging } from "./envelope-staging.ts";
 import { createSweeper } from "../util/sweeper.ts";
@@ -271,6 +272,18 @@ export async function startSlackPlugin(
     ensureHeader,
   });
   approvals.registerActions(app);
+  const briefingActions =
+    CORE_SINGLETON && ACCOUNT_LABEL === "default" && core.briefingCards
+      ? createBriefingCardActions({
+          cards: core.briefingCards,
+          core,
+          directory,
+          client: app.client,
+          teamId: () => ids.ownTeamId,
+          ...(allowActor ? { allowActor } : {}),
+        })
+      : undefined;
+  if (briefingActions) app.action(/^briefing_/, briefingActions.handle);
   const inboxMessage = (
     client: unknown,
     msg: { channel: string; ts: string; threadTs?: string; text?: string; senderSlackId?: string },
@@ -346,6 +359,7 @@ export async function startSlackPlugin(
     await directory.getUserSnapshot(app.client);
     await app.start();
     replaySweeper?.start();
+    briefingActions?.start();
   } catch (err) {
     stopped = true;
     await devIntrospection?.close().catch(swallowAs("slack: dev-introspection close on failed start", undefined));
@@ -439,6 +453,7 @@ export async function startSlackPlugin(
       }
       stopped = true;
       replaySweeper?.stop();
+      briefingActions?.stop();
       if (deliveriesTimer) clearInterval(deliveriesTimer);
       if (emojiCatalogTimer) clearInterval(emojiCatalogTimer);
       if (followerRetry) clearTimeout(followerRetry);

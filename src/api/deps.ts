@@ -68,7 +68,10 @@ import type { RateLimiter } from "../ratelimit/rate-limiter.ts";
 import type { AdvisoryLock } from "../persistence/advisory-lock.ts";
 import type { SlackInstallationStore, SlackSocketAppIdReader } from "../surfaces/slack-installation.ts";
 
+import type { BriefingCards } from "../slack/briefing-cards.ts";
+
 export interface ServerDeps {
+  briefingCards?: BriefingCards;
   production?: boolean;
   allowUnauthenticatedCore?: boolean;
   signingSecret?: string;

@@ -1,3 +1,5 @@
+import { createBriefingCards, type BriefingCards, type BriefingCard } from "../src/slack/briefing-cards.ts";
+import { createMemoryMap } from "../src/persistence/durable-map.ts";
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import type { SlackCoreClient } from "../src/slack/index.ts";
@@ -218,6 +220,7 @@ mock.module("@slack/web-api", { namedExports: { WebClient: class {} } });
 const { slackPluginConfigFromEnv, startSlackPlugin } = await import("../src/slack/index.ts");
 
 class FakeCore implements SlackCoreClient {
+  briefingCards?: BriefingCards;
   async inboxSlackMessage(): Promise<void> {}
   readonly turns: any[] = [];
   readonly ingests: any[][] = [];
@@ -390,6 +393,7 @@ async function waitFor(cond: () => boolean, timeoutMs = 2000): Promise<void> {
 
 async function fixture(
   options: {
+    briefingCards?: BriefingCards;
     externalParticipants?: boolean;
     webUiPublicUrl?: string;
     identityEmail?: "0" | "1";
@@ -401,6 +405,7 @@ async function fixture(
   } = {},
 ) {
   const core = new FakeCore();
+  core.briefingCards = options.briefingCards;
   core.externalParticipants = options.externalParticipants ?? false;
   const started = startSlackPlugin(
     {
@@ -1686,5 +1691,54 @@ test("a denyMessage account stays silent on ambient channel chatter from unliste
     assert.deepEqual(f.core.ingests, []);
   } finally {
     await f.stop();
+  }
+});
+
+test("opt-in briefing cards register real Bolt actions and persist a click", async () => {
+  const cards = createBriefingCards(createMemoryMap<BriefingCard>());
+  const card = await cards.create("U1", {
+    sourceKey: "thread-1",
+    sourceVersion: "message-1",
+    title: "Review",
+    summary: "Check access",
+    sourceUrl: "https://example.com/",
+  });
+  await cards.claimPost(card.id, "T1", "D1");
+  await cards.posted(card.id, "100.001", 0);
+  const f = await fixture({ briefingCards: cards });
+  try {
+    const registration = f.app.actionHandlers.find((h) => String(h.pattern) === String(/^briefing_/));
+    assert.ok(registration);
+    let acked = false;
+    await registration.handler({
+      ack: async () => {
+        acked = true;
+      },
+      client: f.client,
+      body: { team: { id: "T1" }, user: { id: "U1" }, channel: { id: "D1" }, message: { ts: "100.001" } },
+      action: { action_id: "briefing_done", block_id: `briefing:${card.id}:0`, value: `${card.id}:0` },
+    });
+    assert.equal(acked, true);
+    assert.equal((await cards.get(card.id))!.status, "done");
+    assert.ok(f.client.updates.some((p) => p.ts === "100.001" && p.text.includes("Klart")));
+  } finally {
+    await f.stop();
+  }
+});
+
+test("briefing controls are absent when disabled or on non-singleton accounts", async () => {
+  for (const options of [
+    {},
+    { briefingCards: createBriefingCards(createMemoryMap<BriefingCard>()), coreSingleton: false },
+  ]) {
+    const f = await fixture(options);
+    try {
+      assert.equal(
+        f.app.actionHandlers.some((h) => String(h.pattern) === String(/^briefing_/)),
+        false,
+      );
+    } finally {
+      await f.stop();
+    }
   }
 });
