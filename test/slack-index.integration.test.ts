@@ -1719,3 +1719,40 @@ test("briefing draft action works without a card store or singleton sweeper", as
     await f.stop();
   }
 });
+
+test("briefing mark action updates the same Slack DM message without a core turn", async () => {
+  const { briefingCardMessage } = await import("../src/slack/briefing-cards.ts");
+  const f = await fixture({ coreSingleton: false });
+  try {
+    const registration = f.app.actionHandlers.find((h) => String(h.pattern) === String(/^briefing_/));
+    assert.ok(registration);
+    f.client.channelsById.set("D1", { id: "D1", is_im: true, user: "U1" });
+    f.client.messagesByChannel.set("D1", [
+      {
+        ...briefingCardMessage({ title: "Review", summary: "Read source", sourceUrl: "https://example.com/source" }),
+        user: "UBOT",
+        ts: "100.001",
+      },
+    ]);
+    let acked = false;
+    await registration.handler({
+      ack: async () => {
+        acked = true;
+      },
+      body: { team: { id: "T1" }, user: { id: "U1" }, channel: { id: "D1" }, message: { ts: "100.001" } },
+      action: {
+        action_id: "briefing_marks",
+        type: "checkboxes",
+        action_ts: "101.000001",
+        selected_options: [{ value: "done" }, { value: "important" }],
+      },
+    });
+    assert.equal(acked, true);
+    assert.equal(f.core.turns.length, 0);
+    assert.equal(f.client.updates.length, 1);
+    assert.equal(f.client.updates[0].ts, "100.001");
+    assert.match(f.client.updates[0].text, /✅ Klar.*⭐ Viktig/);
+  } finally {
+    await f.stop();
+  }
+});
